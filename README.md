@@ -136,5 +136,5 @@ AWS access uses a dedicated IAM user scoped to ECR push/pull only — not the ac
 - Scheduled, automated DR drills (not just a one-time manual test) with results tracked over time
 ## Author
  
-Khaled Elnabawy — Junior DevOps Engineer, AWS Certified Cloud Practitioner
+Khaled Elnabawy — Junior DevOps Engineer
 [LinkedIn](https://www.linkedin.com/in/khaled-elnabawy-379407268) · [GitHub](https://github.com/Khaled-elnabawy)
