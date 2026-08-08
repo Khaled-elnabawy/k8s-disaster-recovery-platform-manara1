@@ -27,10 +27,10 @@ module "iam" {
 module "eks" {
   source = "../../modules/eks"
 
-  project_name      = "k8s-dr-platform"
-  cluster_role_arn  = module.iam.eks_cluster_role_arn
-  node_role_arn     = module.iam.eks_nodes_role_arn
-  subnet_ids        = module.vpc.private_subnet_ids
+  project_name     = "k8s-dr-platform"
+  cluster_role_arn = module.iam.eks_cluster_role_arn
+  node_role_arn    = module.iam.eks_nodes_role_arn
+  subnet_ids       = module.vpc.private_subnet_ids
 }
 module "s3" {
   source = "../../modules/s3"
