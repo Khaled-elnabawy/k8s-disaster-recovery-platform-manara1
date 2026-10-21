@@ -2,7 +2,7 @@
 
 A Terraform-based AWS project demonstrating backup and recovery for a stateful Kubernetes workload. It provisions core networking and Amazon EKS resources and documents how to configure Velero and validate a backup/restore drill.
 
-> **Scope:** This repository describes a single-region Kubernetes workload-recovery design in eu-central-1. It is not a multi-region Route 53 failover deployment. The architecture diagram is manually composed using official AWS Architecture Icons; it is not an AI-generated flow diagram.
+> **Scope:** This repository describes a single-region Kubernetes workload-recovery design in eu-central-1. It is not a multi-region Route 53 failover deployment. The included diagram files use AWS Architecture Icon artwork and have an editable Draw.io source. Review and finalize the Draw.io layout before submission if the reviewer requires the final diagram to be authored manually.
 
 ## Solution Architecture
 

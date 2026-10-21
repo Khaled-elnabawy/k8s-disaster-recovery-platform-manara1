@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1400" height="850" viewBox="0 0 1400 850">
 <title>Kubernetes Disaster Recovery Platform — AWS Solution Architecture</title>
-<desc>Manually composed AWS architecture diagram using AWS service icon artwork. It illustrates one region with VPC, EKS, Flask, PostgreSQL, EBS, Velero, S3, and EBS snapshot flow. Validate live resources and restore evidence separately.</desc>
+<desc>AWS architecture diagram using AWS service icon artwork. It illustrates one region with VPC, EKS, Flask, PostgreSQL, EBS, Velero, S3, and EBS snapshot flow. Validate live resources and restore evidence separately.</desc>
 <defs>
 <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#526779"/></marker>
 <marker id="backuparrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#C65B0A"/></marker>
@@ -130,5 +130,5 @@
 <rect x="45" y="765" width="1285" height="55" rx="10" fill="#FFFBEA" stroke="#E7C873"/>
 <text x="65" y="788" class="label">Validation note</text>
 <text x="65" y="807" class="small">Diagram describes the target design. Verify live deployment and restore evidence before claiming a successful drill or measured RTO/RPO.</text>
-<text x="47" y="840" class="small">Official AWS Architecture Icons • https://aws.amazon.com/architecture/icons/ • manually composed diagram</text>
+<text x="47" y="840" class="small">Official AWS Architecture Icons • https://aws.amazon.com/architecture/icons/ • editable SVG preview with AWS icon artwork</text>
 </svg>

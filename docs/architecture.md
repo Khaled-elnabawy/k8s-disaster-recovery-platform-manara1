@@ -22,4 +22,4 @@ This is a single-region workload-recovery design in eu-central-1, not a multi-re
 ## Icon source
 
 Use the official AWS Architecture Icons in the submission diagram: https://aws.amazon.com/architecture/icons/
-The SVG and editable draw.io artifacts in this directory are composed manually and use AWS service icon artwork.
+The SVG preview and editable Draw.io source use AWS service icon artwork. Review and finalize the Draw.io layout before submission if the reviewer requires the final diagram to be authored manually.
