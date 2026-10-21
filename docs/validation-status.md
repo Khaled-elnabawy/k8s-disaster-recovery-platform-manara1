@@ -2,30 +2,35 @@
 
 This file distinguishes repository-level checks from actual AWS deployment and recovery evidence.
 
-## Repository artifacts
+## Repository artifact checks
 
-- [ ] Root README matches Project 5 (Warm Standby multi-region DR).
-- [ ] CloudFormation StackSet template reviewed for both target regions.
-- [ ] Terraform formatting/validation passed.
-- [ ] CloudFormation lint passed.
-- [ ] Failover Lambda compiles.
-- [ ] GitHub Actions passed on the final commit.
-- [ ] Final architecture diagram was manually completed using official AWS Architecture Icons and embedded in README.
+The GitHub Actions run below completed successfully for the infrastructure and editable diagram scaffold:
 
-## Configuration review
+- [x] Terraform formatting passed.
+- [x] Terraform initialization and static validation passed.
+- [x] CloudFormation lint passed for the regional StackSet template.
+- [x] Failover Lambda Python compilation passed.
+- [x] GitHub Actions validation workflow completed successfully.
 
-- [ ] Actual primary and secondary CloudFormation outputs recorded in an untracked tfvars file.
-- [ ] Route 53 hosted zone and failover records reviewed.
-- [ ] Aurora Global Database version and replica topology reviewed.
-- [ ] S3 versioning/CRR verified.
+Validated commit: `de91353e2c24fff870b6f1f57fb6d289125c4771`  
+Workflow: https://github.com/Khaled-elnabawy/k8s-disaster-recovery-platform-manara1/actions/runs/39629421884
+
+- [ ] The final architecture diagram has been manually completed in diagrams.net with official AWS Architecture Icons and embedded in README. The current Draw.io file is a scaffold, not the final submission diagram.
+
+## Configuration review — not yet verified against an AWS account
+
+- [ ] Regional CloudFormation StackSets deployed and outputs recorded.
+- [ ] Route 53 hosted zone, health checks and failover records configured.
+- [ ] Aurora Global Database versions, network access and replica topology verified.
+- [ ] S3 Cross-Region Replication tested with a real source object.
 - [ ] DynamoDB Global Table replica status verified.
 - [ ] AWS Backup cross-region copy verified.
-- [ ] CloudWatch alarm, EventBridge forwarding, and secondary Lambda permissions reviewed.
-- [ ] Estimated recurring costs and regional service quotas reviewed.
+- [ ] CloudWatch alarm, EventBridge forwarding and secondary Lambda permissions reviewed.
+- [ ] Estimated costs and service quotas reviewed.
 
 ## Live failover test evidence
 
-No live AWS deployment or failover is claimed by this repository update. Complete after actually running the test.
+No live AWS deployment or failover is claimed by this repository update. Fill this section after actually running the test.
 
 - Test date/time (UTC): __________________
 - Primary region: us-east-1
@@ -46,4 +51,4 @@ No live AWS deployment or failover is claimed by this repository update. Complet
 - Measured RPO / last confirmed data: __________________
 - Errors / corrective actions: __________________
 
-A passing Terraform or CloudFormation static check does not prove that the AWS resources exist or that the failover test succeeded.
+A passing Terraform or CloudFormation static check does not prove that AWS resources exist or that a multi-region failover test succeeded.
