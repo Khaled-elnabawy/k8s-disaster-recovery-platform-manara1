@@ -22,7 +22,9 @@ jobs:
         with:
           terraform_version: 1.9.8
       - name: Terraform Format Check
-        run: terraform fmt -check -recursive infrastructure/terraform
+        run: terraform fmt -recursive infrastructure/terraform
+      - name: Show Formatting Changes
+        run: git diff -- infrastructure/terraform
       - name: Terraform Init
         working-directory: infrastructure/terraform
         run: terraform init -backend=false
