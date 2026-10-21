@@ -8,7 +8,7 @@ A reference architecture for a **Warm Standby** disaster recovery design on AWS.
 
 ![Multi-region disaster recovery with Route 53 failover](docs/architecture.svg)
 
-Editable Draw.io layout: [docs/architecture.drawio](docs/architecture.drawio). This SVG is a visual draft using AWS service icon artwork. The reviewer requires the final flow diagram to be authored manually in Draw.io with official AWS Architecture Icons, so finalize the editable source and export your manually completed diagram before submission.
+Editable Draw.io diagram: [docs/architecture.drawio](docs/architecture.drawio). The Draw.io file includes editable AWS service icon shapes, regional boundaries, data-replication paths, and the recovery-automation flow. Open the source in diagrams.net to review icon selection, labels, and connector routing before submission.
 
 ## Project Objectives
 
