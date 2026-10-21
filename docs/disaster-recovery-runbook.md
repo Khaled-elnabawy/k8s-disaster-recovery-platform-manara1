@@ -1,124 +1,57 @@
 # Disaster Recovery Runbook
 
-> **Warning:** The namespace deletion below is destructive. Use only a disposable test cluster and ensure the selected backup is complete before deleting anything.
+This runbook describes a controlled Warm Standby exercise. Complete it only in a disposable test environment or under an approved change plan. Do not force a production outage for a portfolio demonstration.
 
-## 1. Validate and provision infrastructure
+## 1. Deploy the regional stacks
 
-From the repository root:
+Deploy `infrastructure/cloudformation/regional-warm-standby.yaml` as a CloudFormation StackSet to `us-east-1` and `eu-west-1`.
 
-~~~bash
-terraform -chdir=terraform/environments/prod init
-terraform -chdir=terraform/environments/prod fmt -check
-terraform -chdir=terraform/environments/prod validate
-terraform -chdir=terraform/environments/prod plan
-~~~
+For the primary stack, use an appropriate normal desired capacity. For the secondary stack, use a lower desired capacity while keeping at least one healthy standby instance. Supply an AMI ID valid in each target region. Each stack deploys a VPC across two Availability Zones, private application subnets, NAT gateways, a public ALB, an EC2 Auto Scaling group, and the database security group.
 
-Inspect the plan carefully before applying it; EKS and a NAT Gateway can incur ongoing charges. When you are ready to deploy:
+Record the output values from each region. The Terraform variables must be populated from real outputs; do not copy example or placeholder IDs.
 
-~~~bash
-terraform -chdir=terraform/environments/prod apply
-aws eks update-kubeconfig --region eu-central-1 --name "$(terraform -chdir=terraform/environments/prod output -raw cluster_name)"
-~~~
+## 2. Configure regional and global data services
 
-Only run apply in an account where you understand the resource costs and have reviewed the plan.
+1. Add the Route 53 zone ID, application FQDN, and actual regional ALB attributes to a local untracked `terraform.tfvars`.
+2. Supply private subnet IDs and database security group IDs from both regional stacks.
+3. Select an Aurora engine version supported in both regions and an instance class available in each region.
+4. Review S3 replication, including source/destination bucket versioning and the replication role.
+5. Confirm the DynamoDB Global Table has the requested replica region.
+6. Review the AWS Backup selection tags and confirm the source-to-destination vault copy plan.
+7. Review the EventBridge forwarding role/policy and the secondary event bus/Lambda permissions.
 
-## 2. Create application credentials securely
+Keep passwords and `terraform.tfvars` out of Git. Review the cost of two VPCs, multiple NAT gateways, EC2, Aurora, backups, replicas, and cross-region transfer before applying.
 
-Create the namespace and PostgreSQL credentials from a local terminal. Do not commit passwords to Git:
+## 3. Review the failover path before testing
 
-~~~bash
-kubectl apply -f k8s/demo-app/namespace.yaml
-kubectl apply -f k8s/demo-app/storageclass.yaml
-DB_PASSWORD="$(openssl rand -base64 32)"
-kubectl -n demo-app create secret generic postgres-secret \
-  --from-literal=POSTGRES_USER=appuser \
-  --from-literal=POSTGRES_PASSWORD="$DB_PASSWORD" \
-  --from-literal=POSTGRES_DB=appdb
-kubectl apply -f k8s/demo-app/postgres.yaml
-~~~
+- Route 53 health check points to the real primary ALB health endpoint.
+- Primary and secondary failover records use the correct ALB DNS names and canonical hosted-zone IDs.
+- Secondary ALB targets are healthy at warm capacity.
+- Aurora Global Database replication is healthy and the secondary DB cluster is available.
+- S3 test objects replicate to the destination bucket.
+- DynamoDB test data is visible through the secondary replica.
+- AWS Backup has recent recovery points in both vaults after cross-region copy.
+- CloudWatch sends the primary alarm event; EventBridge forwards it; the secondary Lambda can update only the intended standby group.
 
-Publish the application image to ECR, then replace ACCOUNT_ID in k8s/demo-app/flask-app.yaml with the AWS account ID and deploy:
+## 4. Controlled failover exercise
 
-~~~bash
-kubectl apply -f k8s/demo-app/flask-app.yaml
-kubectl -n demo-app rollout status statefulset/postgres --timeout=300s
-kubectl -n demo-app rollout status deployment/flask-app --timeout=300s
-~~~
+1. Record the UTC start time and create a known application data record.
+2. In a non-production test only, make the primary health check fail using an approved method.
+3. Record when Route 53 health status changes and when the DNS response returns the secondary record from the test client. DNS caching can delay client convergence.
+4. Confirm the primary target alarm enters ALARM state and the event reaches the secondary bus.
+5. Confirm the Lambda invocation and desired-capacity update of the secondary ASG.
+6. Wait until the secondary ALB reports healthy targets.
+7. Follow the approved Aurora Global Database promotion procedure and verify that the intended secondary cluster is writable.
+8. Verify the known application record, a replicated S3 object, and a DynamoDB test item.
+9. Record timestamps, data replication lag, logs, alarms, errors, and recovery outcomes.
 
-## 3. Configure Velero
+## 5. Failback
 
-Read the actual Terraform outputs and use those values in k8s/velero/values.yaml:
+Do not automatically switch traffic back solely because the primary region has recovered. Rebuild and validate the original region, confirm Aurora role and data consistency, verify S3/DynamoDB state, then follow an approved change plan to switch DNS and data roles.
 
-~~~bash
-terraform -chdir=terraform/environments/prod output -raw velero_backup_bucket
-terraform -chdir=terraform/environments/prod output -raw velero_iam_role_arn
-~~~
+## 6. Calculate RTO/RPO
 
-Replace the bucket and role placeholders with these values. The AWS plugin version in the values file should match the installed Velero release. Then install the chart:
+- RTO starts at the declared disruption and ends after the secondary application and writable database have both been verified.
+- RPO is measured by comparing the last confirmed pre-disruption write with the newest data verified in the recovered application.
 
-~~~bash
-helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts
-helm repo update
-helm upgrade --install velero vmware-tanzu/velero \
-  --namespace velero --create-namespace \
-  --values k8s/velero/values.yaml
-kubectl -n velero get pods
-velero backup-location get
-velero snapshot-location get
-~~~
-
-Do not continue until Velero is Ready and the backup location is Available. Confirm the Velero service account is annotated with the intended IRSA role, and verify the EBS CSI add-on is Active.
-
-## 4. Insert a known test record
-
-In terminal A, port-forward the API:
-
-~~~bash
-kubectl -n demo-app port-forward svc/flask-app 8080:80
-~~~
-
-In terminal B, save the response from before the drill:
-
-~~~bash
-curl -sS -X POST http://127.0.0.1:8080/users \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"dr-check-record"}'
-curl -sS http://127.0.0.1:8080/users
-~~~
-
-## 5. Create and inspect a backup
-
-~~~bash
-BACKUP="demo-app-dr-$(date -u +%Y%m%dT%H%M%SZ)"
-date -u +%Y-%m-%dT%H:%M:%SZ
-velero backup create "$BACKUP" --include-namespaces demo-app --wait
-velero backup describe "$BACKUP" --details
-velero backup get "$BACKUP"
-~~~
-
-Only proceed if the backup phase is Completed and the database persistent-volume recovery path is confirmed.
-
-## 6. Restore drill — destructive step
-
-First verify the current context is the intended disposable cluster:
-
-~~~bash
-kubectl config current-context
-read -r -p 'Type DELETE-demo-app to continue: ' CONFIRM
-test "$CONFIRM" = "DELETE-demo-app" || { echo "Cancelled"; exit 1; }
-START_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-kubectl delete namespace demo-app --wait=true
-velero restore create demo-app-restore --from-backup "$BACKUP" --wait
-kubectl wait --for=condition=Ready pods --all -n demo-app --timeout=300s
-END_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-printf 'Recovery start: %s\nRecovery end: %s\nBackup: %s\n' "$START_UTC" "$END_UTC" "$BACKUP"
-~~~
-
-Check the restore description, events, deployments, pods, Services, PVCs, and the same test record from step 4.
-
-## 7. Measure and record
-
-- **RTO:** disruption start until the application is validated healthy.
-- **RPO:** age of the newest application data confirmed recoverable at the disruption time.
-
-Record actual command output, timestamps, pre/post-restore record values, restore phase, and missing resources in docs/validation-status.md. Do not report numeric RTO/RPO until a live test verifies them.
+Fill out `docs/validation-status.md` from actual observations. Do not label an estimate as a measured result.

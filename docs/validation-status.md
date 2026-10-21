@@ -1,45 +1,49 @@
-# Validation Status and Evidence
+# Validation Status
 
-## Repository checks
+This file distinguishes repository-level checks from actual AWS deployment and recovery evidence.
 
-The latest GitHub Actions run for commit f2d62face75bb820b93b14f69943caf417d481e3 completed successfully on 2026-10-21.
+## Repository artifacts
 
-- [x] Terraform format check passed.
-- [x] Terraform init and validate passed.
-- [x] Python smoke tests passed.
-- [x] Docker image build passed.
-- [ ] ECR image publication not run (requires the repository's AWS OIDC role configuration).
+- [ ] Root README matches Project 5 (Warm Standby multi-region DR).
+- [ ] CloudFormation StackSet template reviewed for both target regions.
+- [ ] Terraform formatting/validation passed.
+- [ ] CloudFormation lint passed.
+- [ ] Failover Lambda compiles.
+- [ ] GitHub Actions passed on the final commit.
+- [ ] Final architecture diagram was manually completed using official AWS Architecture Icons and embedded in README.
 
-Workflow run: https://github.com/Khaled-elnabawy/k8s-disaster-recovery-platform-manara1/actions/runs/39620036653
+## Configuration review
 
-## AWS backup/restore evidence
+- [ ] Actual primary and secondary CloudFormation outputs recorded in an untracked tfvars file.
+- [ ] Route 53 hosted zone and failover records reviewed.
+- [ ] Aurora Global Database version and replica topology reviewed.
+- [ ] S3 versioning/CRR verified.
+- [ ] DynamoDB Global Table replica status verified.
+- [ ] AWS Backup cross-region copy verified.
+- [ ] CloudWatch alarm, EventBridge forwarding, and secondary Lambda permissions reviewed.
+- [ ] Estimated recurring costs and regional service quotas reviewed.
 
-No live AWS provisioning or destructive restore drill was executed as part of this repository update. Complete this section only after running the runbook in your own AWS account.
+## Live failover test evidence
 
-- AWS region: __________________
-- EKS cluster name: __________________
-- Test date (UTC): __________________
-- Velero version / AWS plugin version: __________________
-- Backup name / phase: __________________
-- Restore name / phase: __________________
-- Backup completed at (UTC): __________________
-- Namespace deletion started at (UTC): __________________
-- Application validated healthy at (UTC): __________________
+No live AWS deployment or failover is claimed by this repository update. Complete after actually running the test.
+
+- Test date/time (UTC): __________________
+- Primary region: us-east-1
+- Secondary region: eu-west-1
+- Test hostname: __________________
+- Primary health-check transition (UTC): __________________
+- Secondary DNS response first observed (UTC): __________________
+- EventBridge event received in secondary region (UTC): __________________
+- Lambda invocation/result: __________________
+- Secondary ASG desired/current capacity: __________________
+- Secondary ALB healthy-target result: __________________
+- Aurora cluster role after promotion: __________________
+- Database write/read validation: __________________
+- S3 CRR test object validation: __________________
+- DynamoDB replica test item validation: __________________
+- AWS Backup cross-region recovery point: __________________
 - Measured RTO: __________________
-- Newest recovered data timestamp / measured RPO: __________________
-- Pre-disaster test record: __________________
-- Post-restore verification result: __________________
-- Restored resource count and missing resources: __________________
-- Logs or screenshots committed with this report: __________________
+- Measured RPO / last confirmed data: __________________
+- Errors / corrective actions: __________________
 
-## Evidence checklist
-
-- [ ] Velero BackupStorageLocation is Available.
-- [ ] Backup completed and includes the demo-app namespace.
-- [ ] Persistent-volume recovery path is confirmed.
-- [ ] Velero restore completed.
-- [ ] API and database are healthy after restore.
-- [ ] A known record written before the drill is present after restore.
-- [ ] RTO/RPO calculated from actual timestamps, not estimates.
-
-A repository CI pass verifies formatting, static Terraform validation, unit/smoke tests, and Docker build only. It does not verify that AWS resources currently exist or that a live disaster-recovery drill has succeeded.
+A passing Terraform or CloudFormation static check does not prove that the AWS resources exist or that the failover test succeeded.

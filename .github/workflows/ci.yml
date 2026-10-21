@@ -1,4 +1,4 @@
-name: CI
+name: Project Validation
 
 on:
   push:
@@ -6,12 +6,6 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      publish_image:
-        description: "Publish the image to ECR using GitHub OIDC"
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -28,16 +22,16 @@ jobs:
         with:
           terraform_version: 1.9.8
       - name: Terraform Format Check
-        run: terraform fmt -check -recursive terraform/
+        run: terraform fmt -check -recursive infrastructure/terraform
       - name: Terraform Init
-        working-directory: terraform/environments/prod
+        working-directory: infrastructure/terraform
         run: terraform init -backend=false
       - name: Terraform Validate
-        working-directory: terraform/environments/prod
+        working-directory: infrastructure/terraform
         run: terraform validate
 
-  python-tests:
-    name: Python Smoke Tests
+  cloudformation-lint:
+    name: CloudFormation Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,50 +39,10 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: pip
-          cache-dependency-path: app/requirements.txt
-      - name: Install dependencies
-        run: python -m pip install -r app/requirements.txt pytest
-      - name: Compile Python
-        run: python -m compileall -q app
-      - name: Run tests
-        run: pytest -q app/test_app.py
-
-  docker-build:
-    name: Docker Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Build image
-        run: docker build -t k8s-dr-platform-demo-app:test ./app
-
-  publish-image:
-    name: Optional ECR Publish
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_image }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
-          aws-region: eu-central-1
-          role-session-name: GitHubActions-${{ github.run_id }}
-      - name: Login to Amazon ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
-      - name: Build, tag, and push image
-        env:
-          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          ECR_REPOSITORY: k8s-dr-platform-demo-app
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" ./app
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          python-version: "3.12"
+      - name: Install cfn-lint
+        run: python -m pip install cfn-lint
+      - name: Lint regional StackSet template
+        run: cfn-lint infrastructure/cloudformation/regional-warm-standby.yaml
+      - name: Compile failover Lambda
+        run: python -m py_compile infrastructure/lambda/failover.py

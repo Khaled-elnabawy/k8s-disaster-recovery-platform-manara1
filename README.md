@@ -1,133 +1,103 @@
-# Kubernetes Disaster Recovery Platform
+# Multi-Region Disaster Recovery with Route 53 Failover
 
-A Terraform-based AWS project demonstrating backup and recovery for a stateful Kubernetes workload. It provisions core networking and Amazon EKS resources and documents how to configure Velero and validate a backup/restore drill.
+A reference architecture for a **Warm Standby** disaster recovery design on AWS. The primary application stack runs in **US East (N. Virginia), us-east-1**. A smaller standby stack runs in **Europe (Ireland), eu-west-1**. Amazon Route 53 health checks and failover records direct users to the healthy regional Application Load Balancer.
 
-> **Scope:** This repository describes a single-region Kubernetes workload-recovery design in eu-central-1. It is not a multi-region Route 53 failover deployment. The included diagram files use AWS Architecture Icon artwork and have an editable Draw.io source. Review and finalize the Draw.io layout before submission if the reviewer requires the final diagram to be authored manually.
+> **Project scope:** This repository aligns with Project 5 in the AWS Solutions Architect – Associate graduation-project guide. It contains architecture documentation and infrastructure templates. Do not interpret the templates as proof that the AWS resources have been deployed or that a live failover exercise has passed.
 
 ## Solution Architecture
 
-![AWS Kubernetes disaster recovery architecture](docs/architecture.svg)
+**Architecture diagram requirement:** complete `docs/architecture.drawio` manually in diagrams.net using official AWS Architecture Icons, then export the finished diagram as PNG or SVG and embed it here before submission. The included file is only a layout scaffold; it is not the final architecture diagram.
 
-Editable diagram: [Open the Draw.io source](docs/architecture.drawio). See [Architecture Notes](docs/architecture.md) and the [Disaster Recovery Runbook](docs/disaster-recovery-runbook.md).
+## Project Objectives
 
-## Objectives
+- Build a multi-region Warm Standby design with `us-east-1` as primary and `eu-west-1` as secondary.
+- Route users through Route 53 failover records with health checks and a deliberate DNS TTL.
+- Keep a smaller EC2 Auto Scaling application tier in the secondary region and scale it when a primary-region alarm is received.
+- Replicate relational data with Amazon Aurora Global Database.
+- Replicate objects with S3 Cross-Region Replication (CRR).
+- Use DynamoDB Global Tables for multi-region table replication.
+- Create scheduled AWS Backup plans with cross-region copy.
+- Use CloudWatch, EventBridge, and Lambda to trigger the secondary application scale-up workflow.
+- Describe a repeatable failover/failback test and capture measured RTO/RPO evidence.
 
-- Provision networking, EKS, IAM, ECR, and S3 resources using Terraform.
-- Run a Flask API with PostgreSQL state on Amazon EKS.
-- Use an EBS-backed PersistentVolumeClaim for PostgreSQL data.
-- Configure Velero to back up Kubernetes resources to S3 and protect volume data with the configured snapshot mechanism.
-- Use IAM Roles for Service Accounts (IRSA) rather than mounting long-lived AWS credentials in cluster pods.
-- Validate infrastructure formatting, Python smoke tests, and the Docker build in GitHub Actions.
-- Record measured recovery evidence instead of presenting estimates as completed test results.
+## Architecture at a Glance
 
-## Technology Stack
+| Layer | Primary: us-east-1 | Secondary: eu-west-1 | Recovery mechanism |
+|---|---|---|---|
+| DNS and traffic | Route 53 primary failover record | Route 53 secondary failover record | Health check detects unhealthy primary ALB; DNS routes clients to secondary |
+| Application | ALB + EC2 Auto Scaling group at normal capacity | ALB + EC2 Auto Scaling group at warm-standby capacity | EventBridge receives the primary alarm event and Lambda raises standby capacity |
+| Relational data | Aurora Global Database writer cluster | Aurora Global Database secondary cluster | Planned promotion of the secondary cluster during the recovery procedure |
+| Object storage | Versioned S3 source bucket | Versioned S3 replica bucket | S3 Cross-Region Replication |
+| NoSQL | DynamoDB Global Table replica | DynamoDB Global Table replica | DynamoDB manages multi-region replication |
+| Backup | AWS Backup vault and plan | Destination AWS Backup vault | Scheduled backup copy to the secondary region |
+| Operations | CloudWatch alarm and EventBridge rule | EventBridge bus/rule and failover Lambda | Alarm-to-event-bus forwarding and standby scale-up |
 
-| Area | Technology |
-|---|---|
-| Infrastructure as Code | Terraform |
-| Networking | Amazon VPC, public/private subnets, route tables, Internet Gateway, NAT Gateway |
-| Container orchestration | Amazon EKS, kubectl, Helm |
-| Application | Flask API, PostgreSQL |
-| Persistent storage | Amazon EBS, EBS CSI driver, Kubernetes PVC |
-| Backup and recovery | Velero, Amazon S3, EBS snapshots when configured |
-| Container registry | Amazon ECR |
-| Identity | AWS IAM, EKS OIDC provider, IRSA |
-| CI | GitHub Actions |
-
-## Repository Structure
+## Repository Layout
 
 ~~~text
 .
 ├── .github/workflows/ci.yml
-├── app/
-│   ├── app.py
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── test_app.py
 ├── docs/
 │   ├── architecture.md
-│   ├── architecture.svg
 │   ├── architecture.drawio
 │   ├── disaster-recovery-runbook.md
 │   └── validation-status.md
-├── k8s/
-│   ├── demo-app/
-│   │   ├── namespace.yaml
-│   │   ├── storageclass.yaml
-│   │   ├── flask-app.yaml
-│   │   └── postgres.yaml
-│   └── velero/values.yaml
-└── terraform/
-    ├── environments/prod/
-    └── modules/
-        ├── eks/
-        ├── iam/
-        ├── s3/
-        └── vpc/
+└── infrastructure/
+    ├── cloudformation/
+    │   └── regional-warm-standby.yaml
+    ├── lambda/
+    │   └── failover.py
+    └── terraform/
+        ├── providers.tf
+        ├── variables.tf
+        ├── dns-failover.tf
+        ├── data-resilience.tf
+        ├── backup.tf
+        ├── automation.tf
+        ├── outputs.tf
+        └── README.md
 ~~~
 
-The repository also contains a bundled Velero release archive from the original project. The reproducible installation path documented here uses Helm and the AWS plugin; the archive is not referenced by the application or its Kubernetes manifests.
+## Deployment Approach
 
-## Infrastructure
+1. Use CloudFormation StackSets to deploy the regional application stack in both regions. Set a higher desired capacity for the primary stack and a smaller desired capacity for the standby stack.
+2. Record each regional stack's outputs (ALB DNS name and hosted-zone ID, Auto Scaling group name, load-balancer and target-group ARN suffixes, private subnet IDs, and database security-group ID).
+3. Set the Terraform input variables to the stack outputs and the existing Route 53 hosted-zone ID.
+4. Apply the Terraform configuration to add Route 53 failover, Aurora Global Database, S3 CRR, DynamoDB Global Tables, AWS Backup, and the CloudWatch/EventBridge/Lambda automation.
+5. Run the controlled disaster-recovery test in the runbook and record evidence in `docs/validation-status.md`.
 
-Terraform modules describe the following resources:
+Full steps and safety checks are in [the disaster-recovery runbook](docs/disaster-recovery-runbook.md). The infrastructure README describes the expected input values and ordering.
 
-- VPC with public and private subnet sets across two Availability Zones, an Internet Gateway, NAT Gateway, and route tables.
-- EKS cluster and managed node group.
-- IAM roles for the cluster and worker nodes.
-- EKS OIDC provider and dedicated IRSA roles for the EBS CSI driver and Velero.
-- EBS CSI EKS add-on and a gp3 StorageClass for persistent-volume provisioning.
-- S3 bucket with versioning, server-side encryption, and public-access blocking.
-- Private ECR repository with image scanning on push.
+## Recovery Strategy Comparison
 
-The environment is configured for eu-central-1. Inspect the Terraform plan before applying: EKS and a NAT Gateway can incur ongoing AWS charges. Review and restrict the EKS public endpoint CIDRs and IAM permissions for your account before using this beyond a disposable demo environment.
+| Strategy | Recovery approach | Relative cost | Typical recovery characteristics |
+|---|---|---|---|
+| Backup & Restore | Rebuild from backups after an incident | Lowest standby cost | Longest RTO; RPO depends on backup frequency |
+| Pilot Light | Keep critical data services and minimal core resources running | Low to medium | Faster than full rebuild; application tier still needs scaling/provisioning |
+| Warm Standby | Keep a reduced but functional secondary stack running | Medium | Faster regional recovery; secondary scales up after failover |
+| Multi-Site Active-Active | Serve live traffic from multiple regions | Highest | Low recovery delay but more complex data consistency and traffic management |
 
-## Application
+This project focuses on **Warm Standby** as requested by the guide. Actual RTO/RPO depend on the deployed services, database replication lag, DNS caching, and the tested recovery procedure.
 
-The demo API provides a health response and basic user-record endpoints backed by PostgreSQL. The Kubernetes manifests are in k8s/demo-app. PostgreSQL runs in a StatefulSet and uses a PersistentVolumeClaim intended to be backed by EBS through the EBS CSI driver.
+## Security and Cost Considerations
 
-Database credentials are not stored in the repository. Create the postgres-secret in the demo-app namespace as described in the runbook. Replace ACCOUNT_ID in the Flask deployment image with the AWS account ID after publishing the container to ECR.
+- Restrict Route 53 health checks to a dedicated application health endpoint.
+- Keep database security groups private and restrict ingress to the application security group.
+- Use managed database credentials, KMS encryption, S3 public-access blocks, least-privilege IAM, and CloudFormation StackSets for repeatable regional deployment.
+- EC2 instances accept application traffic only from the regional load balancer security group; SSH ingress is not opened by this template.
+- Multi-AZ load balancers, NAT/networking, EC2, Aurora, DynamoDB replicas, AWS Backup, and cross-region data transfer can incur charges. Review estimates and plans before deployment.
+- Failover to a secondary Route 53 record is not the same as promoting the Aurora secondary cluster. Follow the runbook and verify database role, write readiness, and application health before declaring recovery.
 
-## Backup and Recovery
+## Validation Status
 
-The Velero Helm values template is in k8s/velero/values.yaml. Before installing it, replace the bucket and role placeholders with the Terraform output values and ensure the AWS plugin version matches the Velero version installed.
+Infrastructure templates and documentation are provided for review. No live AWS deployment or disaster-recovery drill is claimed by this repository update. The status and evidence checklist is in [validation-status.md](docs/validation-status.md).
 
-The [runbook](docs/disaster-recovery-runbook.md) documents how to:
+## References
 
-1. Validate and provision the infrastructure.
-2. Deploy the demo workload and create its database Secret securely.
-3. Configure Velero's S3 BackupStorageLocation and EBS snapshot location.
-4. Insert a known database record and create a named backup.
-5. Inspect backup status and confirm the persistent-data recovery path.
-6. Delete only the disposable demo-app namespace after checking the backup.
-7. Restore the namespace and verify the API, database, PVC, and original test record.
-8. Record timestamps and compute measured recovery metrics.
-
-### RTO and RPO
-
-- **RTO (Recovery Time Objective):** elapsed time from the defined disruption until the application is verified healthy again.
-- **RPO (Recovery Point Objective):** age of the most recent application data that is confirmed recoverable at the disruption time.
-
-No new AWS provisioning or destructive restore drill was executed during this repository update. Do not report a specific RTO, RPO, resource count, or data-integrity percentage until you have run the drill and recorded evidence in docs/validation-status.md.
-
-## CI/CD
-
-GitHub Actions runs Terraform format/validation checks, Python smoke tests, and a Docker build on pushes and pull requests. An optional workflow-dispatch input can publish the image to ECR using GitHub OIDC. Publishing requires an AWS role configured for GitHub's OIDC provider and the repository variable AWS_ROLE_TO_ASSUME; ordinary validation does not require AWS credentials.
-
-## Security and Cost
-
-- Never commit AWS access keys, kubeconfig files, Terraform state, database passwords, or real backup data.
-- Prefer GitHub OIDC federation over long-lived AWS access keys.
-- Review EKS endpoint exposure, IAM policies, Kubernetes Secrets, and network ingress rules.
-- Keep destructive recovery drills within the demo-app namespace on a disposable cluster.
-- Review Terraform plans before apply and remove test resources when no longer needed.
-
-## Evidence and Limitations
-
-The repository contains a [validation evidence template](docs/validation-status.md). It is intentionally blank until tests are run. A diagram, Terraform definition, or README statement does not prove that resources are deployed or that a restore has succeeded.
-
-Future improvements include tested backup retention, automated backup-failure alerts, additional application integration tests, and regional recovery only if that scope is explicitly selected and implemented.
-
-## Project Author
-
-Khaled Elnabawy — Junior DevOps Engineer
+- [AWS Solutions Architect – Associate project guide context](docs/architecture.md)
+- [AWS Architecture Icons](https://aws.amazon.com/architecture/icons/)
+- [Amazon Route 53 failover routing](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-failover.html)
+- [Aurora Global Database](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html)
+- [S3 Cross-Region Replication](https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html)
+- [DynamoDB Global Tables](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GlobalTables.html)
+- [AWS Backup](https://docs.aws.amazon.com/aws-backup/latest/devguide/whatisbackup.html)
