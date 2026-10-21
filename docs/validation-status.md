@@ -4,7 +4,7 @@ This file distinguishes repository-level checks from actual AWS deployment and r
 
 ## Repository artifact checks
 
-The GitHub Actions run below completed successfully for the infrastructure and editable diagram scaffold:
+The GitHub Actions run below completed successfully for the infrastructure templates and Lambda file; the latest README/SVG documentation update is still awaiting its own CI run:
 
 - [x] Terraform formatting passed.
 - [x] Terraform initialization and static validation passed.
@@ -12,7 +12,7 @@ The GitHub Actions run below completed successfully for the infrastructure and e
 - [x] Failover Lambda Python compilation passed.
 - [x] GitHub Actions validation workflow completed successfully.
 
-Validated commit: `de91353e2c24fff870b6f1f57fb6d289125c4771`  
+Validated infrastructure commit: `de91353e2c24fff870b6f1f57fb6d289125c4771`  
 Workflow: https://github.com/Khaled-elnabawy/k8s-disaster-recovery-platform-manara1/actions/runs/39629421884
 
 - [ ] The final architecture diagram has been manually completed in diagrams.net with official AWS Architecture Icons and embedded in README. The current Draw.io file is a scaffold, not the final submission diagram.

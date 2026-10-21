@@ -24,7 +24,7 @@ DNS failover and database promotion are distinct operations. The runbook require
 
 ## Required diagram work
 
-The included `architecture.drawio` file is only a scaffold. The project reviewer explicitly said AI-generated flow diagrams will not qualify and the final drawing must use official AWS icons. Complete the architecture diagram manually in diagrams.net, use the official AWS Architecture Icons library, label region boundaries and every replication/failover path, export to `docs/architecture.png` or `docs/architecture.svg`, and embed the exported diagram in README before submitting.
+The included `architecture.svg` is the visual preview embedded in the README; `architecture.drawio` is the editable layout scaffold. The project reviewer explicitly said AI-generated flow diagrams will not qualify and the final drawing must use official AWS icons. Before submission, complete the final drawing manually in diagrams.net, verify every service icon comes from the official AWS Architecture Icons library, label region boundaries and every replication/failover path, then export the manually completed diagram and update the README.
 
 Official icon catalog: https://aws.amazon.com/architecture/icons/
 
