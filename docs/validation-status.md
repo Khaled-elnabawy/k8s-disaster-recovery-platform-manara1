@@ -15,7 +15,7 @@ The GitHub Actions run below completed successfully for the infrastructure templ
 Validated commit: `c4d3fdd9131fba012261023f386481a84db0c990`  
 Workflow: https://github.com/Khaled-elnabawy/multi-region-disaster-recovery-route53-failover/actions/runs/39632218823
 
-- [ ] The final architecture diagram has been manually completed in diagrams.net with official AWS Architecture Icons and embedded in README. The current SVG is a visual preview and the Draw.io file is an editable scaffold, not the final submission diagram.
+- [ ] Manually inspect the editable `docs/architecture.drawio` in diagrams.net, verify service icons against the official AWS Architecture Icons library, and adjust any labels/connectors needed to meet the reviewer's diagram requirement. The README currently embeds the SVG visual preview.
 
 ## Configuration review — not yet verified against an AWS account
 
