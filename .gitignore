@@ -1,6 +1,14 @@
 .terraform/
 *.tfstate
-*.tfstate.backup
-*.tfvars
-.terraform.lock.hcl
+*.tfstate.*
 crash.log
+.env
+.env.*
+*.pem
+*.key
+kubeconfig
+.kube/
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/

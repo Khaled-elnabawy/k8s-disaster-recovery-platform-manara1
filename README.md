@@ -1,140 +1,131 @@
 # Kubernetes Disaster Recovery Platform
- 
-A production-style AWS infrastructure project demonstrating end-to-end disaster recovery for stateful Kubernetes workloads — built with Terraform, EKS, Velero, and a validated backup/restore drill with measured RTO and RPO.
- 
-## Overview
- 
-Most portfolio projects stop at "I deployed an app on Kubernetes." This project goes further: it proves the infrastructure can survive a disaster. A full namespace — including a stateful PostgreSQL database — was deliberately deleted and restored from backup, with the recovery time and data integrity documented below.
- 
-## Architecture
- 
-```
-GitHub (source + CI)
-   │
-   ▼
-GitHub Actions ──► Amazon ECR (Docker image)
-   │
-   ▼
-Terraform ──► AWS (VPC, IAM, EKS, S3, ECR)
-                        │
-                        ▼
-                 EKS Cluster
-            ┌───────────┴───────────┐
-            │                       │
-      Flask API              PostgreSQL (StatefulSet + EBS PVC)
-            │                       │
-            └───────────┬───────────┘
-                         ▼
-                      Velero ──► S3 (backup metadata) + EBS Snapshots (volume data)
-                         │
-                         ▼
-              Prometheus + Grafana (backup/restore monitoring)
-```
- 
-## Tech Stack
- 
-| Category | Tools |
+
+A Terraform-based AWS project demonstrating backup and recovery for a stateful Kubernetes workload. It provisions core networking and Amazon EKS resources and documents how to configure Velero and validate a backup/restore drill.
+
+> **Scope:** This repository describes a single-region Kubernetes workload-recovery design in eu-central-1. It is not a multi-region Route 53 failover deployment. The architecture diagram is manually composed using official AWS Architecture Icons; it is not an AI-generated flow diagram.
+
+## Solution Architecture
+
+![AWS Kubernetes disaster recovery architecture](docs/architecture.svg)
+
+Editable diagram: [Open the Draw.io source](docs/architecture.drawio). See [Architecture Notes](docs/architecture.md) and the [Disaster Recovery Runbook](docs/disaster-recovery-runbook.md).
+
+## Objectives
+
+- Provision networking, EKS, IAM, ECR, and S3 resources using Terraform.
+- Run a Flask API with PostgreSQL state on Amazon EKS.
+- Use an EBS-backed PersistentVolumeClaim for PostgreSQL data.
+- Configure Velero to back up Kubernetes resources to S3 and protect volume data with the configured snapshot mechanism.
+- Use IAM Roles for Service Accounts (IRSA) rather than mounting long-lived AWS credentials in cluster pods.
+- Validate infrastructure formatting, Python smoke tests, and the Docker build in GitHub Actions.
+- Record measured recovery evidence instead of presenting estimates as completed test results.
+
+## Technology Stack
+
+| Area | Technology |
 |---|---|
-| Infrastructure as Code | Terraform (modular: VPC, IAM, EKS, S3) |
-| Container Orchestration | Amazon EKS, kubectl, Helm |
-| Backup & Disaster Recovery | Velero, AWS EBS Snapshots, S3 |
-| Application | Flask API, PostgreSQL (StatefulSet) |
-| CI | GitHub Actions (Terraform validation, Docker build/push to ECR) |
-| Monitoring | Prometheus, Grafana |
-| Cloud Provider | AWS (VPC, EKS, IAM/IRSA, S3, ECR, EBS) |
- 
-## Infrastructure
- 
-All infrastructure is provisioned through modular Terraform:
- 
-- **VPC module** — public/private subnets across 2 AZs, NAT Gateway, Internet Gateway, route tables
-- **IAM module** — least-privilege roles for the EKS cluster and node group
-- **EKS module** — managed EKS cluster (Kubernetes 1.34) with a managed node group
-- **S3 module** — versioned, encrypted bucket for Velero backup storage
-- IAM Roles for Service Accounts (IRSA) used for both the EBS CSI driver and Velero, avoiding long-lived static credentials
-## Sample Application
- 
-A minimal Flask REST API backed by PostgreSQL, deployed as:
-- Flask `Deployment` + `Service`
-- PostgreSQL `StatefulSet` with a `PersistentVolumeClaim` backed by an EBS volume
-This gives the backup/restore drill real, stateful data to work with — not just stateless manifests.
- 
-## Backup Strategy
- 
-Velero is installed via Helm with IRSA-based AWS access (no static credentials mounted in the pod). It performs:
- 
-- **Snapshot-based backups** of EBS-backed PersistentVolumes
-- **On-demand backups** for testing and pre-change safety
-- **Scheduled daily backups** (`0 2 * * *`, 30-day retention)
-Backups are stored in S3; volume data is captured via native EBS snapshots.
- 
-## Disaster Recovery Drill
- 
-This is the core of the project. The steps performed, in order:
- 
-1. Inserted known test records into the PostgreSQL database via the Flask API
-2. Took a Velero backup of the `demo-app` namespace
-3. **Deleted the entire `demo-app` namespace** — Postgres, Flask, PVCs, Secrets, everything
-4. Confirmed the namespace was fully gone (`NotFound`)
-5. Ran `velero restore create --from-backup <backup-name>`
-6. Verified every resource came back and the API returned the exact same records as before deletion
-### Results
- 
-| Metric | Result |
-|---|---|
-| Resources restored | 19 / 19 (100%) |
-| Data integrity | 100% match — all pre-disaster records recovered |
-| RTO (Recovery Time Objective) | ~2 minutes |
-| RPO (Recovery Point Objective) | 0 — no data loss |
- 
-## Monitoring
- 
-`kube-prometheus-stack` (Prometheus + Grafana + Alertmanager) is deployed via Helm. A `ServiceMonitor` exposes Velero's `/metrics` endpoint to Prometheus, feeding a Grafana dashboard that tracks:
- 
-- Total backup count and success/failure rate
-- Total restore count
-- Time since last successful backup
-## CI Pipeline
- 
-GitHub Actions runs on every push to `main`:
- 
-1. **Terraform Format & Validate** — `terraform fmt -check` and `terraform validate` against all modules
-2. **Build & Push Docker Image** — builds the Flask app image and pushes it to Amazon ECR, tagged with both `latest` and the commit SHA
-AWS access uses a dedicated IAM user scoped to ECR push/pull only — not the account's primary credentials.
- 
+| Infrastructure as Code | Terraform |
+| Networking | Amazon VPC, public/private subnets, route tables, Internet Gateway, NAT Gateway |
+| Container orchestration | Amazon EKS, kubectl, Helm |
+| Application | Flask API, PostgreSQL |
+| Persistent storage | Amazon EBS, EBS CSI driver, Kubernetes PVC |
+| Backup and recovery | Velero, Amazon S3, EBS snapshots when configured |
+| Container registry | Amazon ECR |
+| Identity | AWS IAM, EKS OIDC provider, IRSA |
+| CI | GitHub Actions |
+
 ## Repository Structure
- 
-```
+
+~~~text
 .
-├── terraform/
-│   ├── modules/
-│   │   ├── vpc/
-│   │   ├── iam/
-│   │   ├── eks/
-│   │   └── s3/
-│   └── environments/
-│       └── prod/
+├── .github/workflows/ci.yml
+├── app/
+│   ├── app.py
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── test_app.py
+├── docs/
+│   ├── architecture.md
+│   ├── architecture.svg
+│   ├── architecture.drawio
+│   ├── disaster-recovery-runbook.md
+│   └── validation-status.md
 ├── k8s/
-│   └── demo-app/          # Postgres + Flask manifests
-├── app/                    # Flask application source + Dockerfile
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-└── docs/                    # Architecture diagram, DR report, screenshots
-```
- 
-## Key Engineering Decisions
- 
-- **IRSA over static credentials** — both the EBS CSI driver and Velero authenticate via IAM Roles for Service Accounts rather than access keys baked into the cluster.
-- **Modular Terraform** — infrastructure is split into reusable modules instead of one monolithic configuration, making it easier to extend or reuse across environments.
-- **Namespace-scoped destruction, not simulated** — the DR drill deletes real Kubernetes resources rather than relying on a theoretical failure scenario, so the recovery numbers above are measured, not estimated.
-- **Least-privilege IAM everywhere** — every role (cluster, nodes, EBS CSI, Velero, CI) is scoped to only the permissions it needs.
-## What I'd Improve Next
- 
-- Cross-region backup replication for full region-loss resilience
-- Automated alerting on backup failure via Alertmanager → Slack/email
-- Scheduled, automated DR drills (not just a one-time manual test) with results tracked over time
-## Author
- 
+│   ├── demo-app/
+│   │   ├── namespace.yaml
+│   │   ├── flask-app.yaml
+│   │   └── postgres.yaml
+│   └── velero/values.yaml
+└── terraform/
+    ├── environments/prod/
+    └── modules/
+        ├── eks/
+        ├── iam/
+        ├── s3/
+        └── vpc/
+~~~
+
+The repository also contains a bundled Velero release archive from the original project. The reproducible installation path documented here uses Helm and the AWS plugin; keep software archives out of application manifests and update the archive deliberately if it is retained.
+
+## Infrastructure
+
+Terraform modules describe the following resources:
+
+- VPC with public and private subnet sets across two Availability Zones, an Internet Gateway, NAT Gateway, and route tables.
+- EKS cluster and managed node group.
+- IAM roles for the cluster and worker nodes.
+- EKS OIDC provider and dedicated IRSA roles for the EBS CSI driver and Velero.
+- EBS CSI EKS add-on for dynamic persistent-volume provisioning.
+- Randomly suffixed S3 bucket with versioning, server-side encryption, and public-access blocking.
+- Private ECR repository with image scanning on push.
+
+The environment is configured for eu-central-1. Inspect the Terraform plan before applying: EKS and a NAT Gateway can incur ongoing AWS charges. Review and restrict the EKS public endpoint CIDRs and IAM permissions for your account before using this beyond a disposable demo environment.
+
+## Application
+
+The demo API provides a simple health response and basic user-record endpoints backed by PostgreSQL. The Kubernetes manifests are in k8s/demo-app. PostgreSQL runs in a StatefulSet and uses a PersistentVolumeClaim intended to be backed by EBS through the EBS CSI driver.
+
+Database credentials are not stored in the repository. Create the postgres-secret in the demo-app namespace as described in the runbook. Replace ACCOUNT_ID in the Flask deployment image with the AWS account ID after publishing the container to ECR.
+
+## Backup and Recovery
+
+The Velero Helm values template is in k8s/velero/values.yaml. Before installing it, replace the bucket and role placeholders with the Terraform output values and ensure the AWS plugin version matches the Velero version installed.
+
+The [runbook](docs/disaster-recovery-runbook.md) documents the steps to:
+
+1. Validate the infrastructure and deploy the demo workload.
+2. Configure Velero's S3 BackupStorageLocation and EBS volume-snapshot location.
+3. Insert a known database record and create a named backup.
+4. Inspect backup status and confirm the persistent-data recovery path.
+5. Delete only the disposable demo-app namespace after checking the backup.
+6. Restore the namespace and verify the API, database, PVC, and original test record.
+7. Record timestamps and compute measured recovery metrics.
+
+### RTO and RPO
+
+- **RTO (Recovery Time Objective):** elapsed time from the defined disruption until the application is verified healthy again.
+- **RPO (Recovery Point Objective):** age of the most recent application data that is confirmed recoverable at the disruption time.
+
+No new AWS provisioning or destructive restore drill was executed during this repository update. Do not report a specific RTO, RPO, resource count, or data-integrity percentage until you have run the drill and recorded its evidence in docs/validation-status.md.
+
+## CI/CD
+
+GitHub Actions runs the Terraform format/validation checks, Python smoke tests, and a Docker build on pushes and pull requests. An optional workflow-dispatch input can publish the image to ECR using GitHub OIDC. Publishing requires an AWS role configured for GitHub's OIDC provider and the repository variable AWS_ROLE_TO_ASSUME; ordinary validation does not require AWS credentials.
+
+## Security and Cost
+
+- Never commit AWS access keys, kubeconfig files, Terraform state, database passwords, or real backup data.
+- Prefer GitHub OIDC federation over long-lived AWS access keys.
+- Review EKS endpoint exposure, IAM policies, Kubernetes secrets, and network ingress rules.
+- Keep destructive recovery drills within the demo-app namespace on a disposable cluster.
+- Review Terraform plans before apply and remove test resources when no longer needed.
+
+## Evidence and Limitations
+
+The repository contains a [validation evidence template](docs/validation-status.md). It is intentionally blank until tests are run. A diagram, Terraform definition, or README statement does not prove that resources are deployed or that a restore has succeeded.
+
+Future improvements include scheduled, tested backup retention; automated backup-failure alerts; additional application integration tests; and regional recovery only if that scope is explicitly selected and implemented.
+
+## Project Author
+
 Khaled Elnabawy — Junior DevOps Engineer
-[LinkedIn](https://www.linkedin.com/in/khaled-elnabawy-379407268) · [GitHub](https://github.com/Khaled-elnabawy)
