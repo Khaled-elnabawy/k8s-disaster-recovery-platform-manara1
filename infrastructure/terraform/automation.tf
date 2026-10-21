@@ -51,9 +51,9 @@ resource "aws_iam_role" "eventbridge_forwarder" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "events.amazonaws.com" }
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -117,9 +117,9 @@ resource "aws_iam_role" "standby_scale_lambda" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "lambda.amazonaws.com" }
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -144,8 +144,8 @@ resource "aws_iam_role_policy" "standby_scale_lambda" {
         Resource = "*"
       },
       {
-        Effect = "Allow"
-        Action = ["autoscaling:UpdateAutoScalingGroup"]
+        Effect   = "Allow"
+        Action   = ["autoscaling:UpdateAutoScalingGroup"]
         Resource = "arn:aws:autoscaling:${var.secondary_region}:${data.aws_caller_identity.secondary.account_id}:autoScalingGroup:*:autoScalingGroupName/${var.secondary_asg_name}"
       }
     ]

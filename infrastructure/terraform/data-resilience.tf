@@ -206,25 +206,25 @@ resource "aws_db_subnet_group" "secondary" {
 
 resource "aws_rds_global_cluster" "app" {
   global_cluster_identifier = "${var.project_name}-aurora-global"
-  engine                   = "aurora-mysql"
-  engine_version           = var.aurora_engine_version
-  database_name            = var.database_name
-  storage_encrypted        = true
+  engine                    = "aurora-mysql"
+  engine_version            = var.aurora_engine_version
+  database_name             = var.database_name
+  storage_encrypted         = true
 
   deletion_protection = false
 }
 
 resource "aws_rds_cluster" "primary" {
-  cluster_identifier        = "${var.project_name}-aurora-primary"
-  engine                    = aws_rds_global_cluster.app.engine
-  engine_version            = aws_rds_global_cluster.app.engine_version
-  global_cluster_identifier = aws_rds_global_cluster.app.id
-  database_name             = var.database_name
-  master_username           = var.database_master_username
+  cluster_identifier          = "${var.project_name}-aurora-primary"
+  engine                      = aws_rds_global_cluster.app.engine
+  engine_version              = aws_rds_global_cluster.app.engine_version
+  global_cluster_identifier   = aws_rds_global_cluster.app.id
+  database_name               = var.database_name
+  master_username             = var.database_master_username
   manage_master_user_password = true
 
-  db_subnet_group_name   = aws_db_subnet_group.primary.name
-  vpc_security_group_ids = [var.primary_database_security_group_id]
+  db_subnet_group_name    = aws_db_subnet_group.primary.name
+  vpc_security_group_ids  = [var.primary_database_security_group_id]
   backup_retention_period = 7
   storage_encrypted       = true
   deletion_protection     = false

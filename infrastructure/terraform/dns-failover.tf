@@ -29,9 +29,9 @@ resource "aws_route53_health_check" "secondary_alb" {
 }
 
 resource "aws_route53_record" "primary" {
-  zone_id        = var.route53_hosted_zone_id
-  name           = var.application_fqdn
-  type           = "A"
+  zone_id         = var.route53_hosted_zone_id
+  name            = var.application_fqdn
+  type            = "A"
   set_identifier  = "primary-us-east-1"
   health_check_id = aws_route53_health_check.primary_alb.id
 
