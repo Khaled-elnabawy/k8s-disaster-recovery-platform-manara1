@@ -2,7 +2,7 @@
 
 > **Warning:** The namespace deletion below is destructive. Use only a disposable test cluster and ensure the selected backup is complete before deleting anything.
 
-## 1. Validate Terraform
+## 1. Validate and provision infrastructure
 
 From the repository root:
 
@@ -13,7 +13,14 @@ terraform -chdir=terraform/environments/prod validate
 terraform -chdir=terraform/environments/prod plan
 ~~~
 
-Inspect the plan carefully before applying it; EKS and NAT Gateway resources can incur ongoing charges.
+Inspect the plan carefully before applying it; EKS and a NAT Gateway can incur ongoing charges. When you are ready to deploy:
+
+~~~bash
+terraform -chdir=terraform/environments/prod apply
+aws eks update-kubeconfig --region eu-central-1 --name "$(terraform -chdir=terraform/environments/prod output -raw cluster_name)"
+~~~
+
+Only run apply in an account where you understand the resource costs and have reviewed the plan.
 
 ## 2. Create application credentials securely
 
@@ -21,6 +28,7 @@ Create the namespace and PostgreSQL credentials from a local terminal. Do not co
 
 ~~~bash
 kubectl apply -f k8s/demo-app/namespace.yaml
+kubectl apply -f k8s/demo-app/storageclass.yaml
 DB_PASSWORD="$(openssl rand -base64 32)"
 kubectl -n demo-app create secret generic postgres-secret \
   --from-literal=POSTGRES_USER=appuser \
@@ -39,7 +47,14 @@ kubectl -n demo-app rollout status deployment/flask-app --timeout=300s
 
 ## 3. Configure Velero
 
-The file k8s/velero/values.yaml contains a Helm values template. Replace the bucket and role placeholders with the Terraform outputs for the backup bucket and Velero IAM role. The AWS plugin image/version and IAM permissions must match the Velero version being installed.
+Read the actual Terraform outputs and use those values in k8s/velero/values.yaml:
+
+~~~bash
+terraform -chdir=terraform/environments/prod output -raw velero_backup_bucket
+terraform -chdir=terraform/environments/prod output -raw velero_iam_role_arn
+~~~
+
+Replace the bucket and role placeholders with these values. The AWS plugin version in the values file should match the installed Velero release. Then install the chart:
 
 ~~~bash
 helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts
@@ -52,7 +67,7 @@ velero backup-location get
 velero snapshot-location get
 ~~~
 
-Do not continue until Velero is Ready and the backup location is Available. Confirm the Velero service account is annotated with the intended IRSA role, and verify that the EBS CSI add-on is Active.
+Do not continue until Velero is Ready and the backup location is Available. Confirm the Velero service account is annotated with the intended IRSA role, and verify the EBS CSI add-on is Active.
 
 ## 4. Insert a known test record
 
@@ -106,4 +121,4 @@ Check the restore description, events, deployments, pods, Services, PVCs, and th
 - **RTO:** disruption start until the application is validated healthy.
 - **RPO:** age of the newest application data confirmed recoverable at the disruption time.
 
-Record actual command output, timestamps, pre/post restore record values, restore phase, and missing resources in docs/validation-status.md. Do not report numeric RTO/RPO until a live test verifies them.
+Record actual command output, timestamps, pre/post-restore record values, restore phase, and missing resources in docs/validation-status.md. Do not report numeric RTO/RPO until a live test verifies them.

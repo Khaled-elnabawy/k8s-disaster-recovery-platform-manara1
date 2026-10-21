@@ -1,4 +1,4 @@
-from app import app as app_module
+import app as app_module
 
 
 def test_home_reports_service_status():

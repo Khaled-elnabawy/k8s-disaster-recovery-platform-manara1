@@ -53,6 +53,7 @@ Editable diagram: [Open the Draw.io source](docs/architecture.drawio). See [Arch
 ├── k8s/
 │   ├── demo-app/
 │   │   ├── namespace.yaml
+│   │   ├── storageclass.yaml
 │   │   ├── flask-app.yaml
 │   │   └── postgres.yaml
 │   └── velero/values.yaml
@@ -65,7 +66,7 @@ Editable diagram: [Open the Draw.io source](docs/architecture.drawio). See [Arch
         └── vpc/
 ~~~
 
-The repository also contains a bundled Velero release archive from the original project. The reproducible installation path documented here uses Helm and the AWS plugin; keep software archives out of application manifests and update the archive deliberately if it is retained.
+The repository also contains a bundled Velero release archive from the original project. The reproducible installation path documented here uses Helm and the AWS plugin; the archive is not referenced by the application or its Kubernetes manifests.
 
 ## Infrastructure
 
@@ -75,15 +76,15 @@ Terraform modules describe the following resources:
 - EKS cluster and managed node group.
 - IAM roles for the cluster and worker nodes.
 - EKS OIDC provider and dedicated IRSA roles for the EBS CSI driver and Velero.
-- EBS CSI EKS add-on for dynamic persistent-volume provisioning.
-- Randomly suffixed S3 bucket with versioning, server-side encryption, and public-access blocking.
+- EBS CSI EKS add-on and a gp3 StorageClass for persistent-volume provisioning.
+- S3 bucket with versioning, server-side encryption, and public-access blocking.
 - Private ECR repository with image scanning on push.
 
 The environment is configured for eu-central-1. Inspect the Terraform plan before applying: EKS and a NAT Gateway can incur ongoing AWS charges. Review and restrict the EKS public endpoint CIDRs and IAM permissions for your account before using this beyond a disposable demo environment.
 
 ## Application
 
-The demo API provides a simple health response and basic user-record endpoints backed by PostgreSQL. The Kubernetes manifests are in k8s/demo-app. PostgreSQL runs in a StatefulSet and uses a PersistentVolumeClaim intended to be backed by EBS through the EBS CSI driver.
+The demo API provides a health response and basic user-record endpoints backed by PostgreSQL. The Kubernetes manifests are in k8s/demo-app. PostgreSQL runs in a StatefulSet and uses a PersistentVolumeClaim intended to be backed by EBS through the EBS CSI driver.
 
 Database credentials are not stored in the repository. Create the postgres-secret in the demo-app namespace as described in the runbook. Replace ACCOUNT_ID in the Flask deployment image with the AWS account ID after publishing the container to ECR.
 
@@ -91,32 +92,33 @@ Database credentials are not stored in the repository. Create the postgres-secre
 
 The Velero Helm values template is in k8s/velero/values.yaml. Before installing it, replace the bucket and role placeholders with the Terraform output values and ensure the AWS plugin version matches the Velero version installed.
 
-The [runbook](docs/disaster-recovery-runbook.md) documents the steps to:
+The [runbook](docs/disaster-recovery-runbook.md) documents how to:
 
-1. Validate the infrastructure and deploy the demo workload.
-2. Configure Velero's S3 BackupStorageLocation and EBS volume-snapshot location.
-3. Insert a known database record and create a named backup.
-4. Inspect backup status and confirm the persistent-data recovery path.
-5. Delete only the disposable demo-app namespace after checking the backup.
-6. Restore the namespace and verify the API, database, PVC, and original test record.
-7. Record timestamps and compute measured recovery metrics.
+1. Validate and provision the infrastructure.
+2. Deploy the demo workload and create its database Secret securely.
+3. Configure Velero's S3 BackupStorageLocation and EBS snapshot location.
+4. Insert a known database record and create a named backup.
+5. Inspect backup status and confirm the persistent-data recovery path.
+6. Delete only the disposable demo-app namespace after checking the backup.
+7. Restore the namespace and verify the API, database, PVC, and original test record.
+8. Record timestamps and compute measured recovery metrics.
 
 ### RTO and RPO
 
 - **RTO (Recovery Time Objective):** elapsed time from the defined disruption until the application is verified healthy again.
 - **RPO (Recovery Point Objective):** age of the most recent application data that is confirmed recoverable at the disruption time.
 
-No new AWS provisioning or destructive restore drill was executed during this repository update. Do not report a specific RTO, RPO, resource count, or data-integrity percentage until you have run the drill and recorded its evidence in docs/validation-status.md.
+No new AWS provisioning or destructive restore drill was executed during this repository update. Do not report a specific RTO, RPO, resource count, or data-integrity percentage until you have run the drill and recorded evidence in docs/validation-status.md.
 
 ## CI/CD
 
-GitHub Actions runs the Terraform format/validation checks, Python smoke tests, and a Docker build on pushes and pull requests. An optional workflow-dispatch input can publish the image to ECR using GitHub OIDC. Publishing requires an AWS role configured for GitHub's OIDC provider and the repository variable AWS_ROLE_TO_ASSUME; ordinary validation does not require AWS credentials.
+GitHub Actions runs Terraform format/validation checks, Python smoke tests, and a Docker build on pushes and pull requests. An optional workflow-dispatch input can publish the image to ECR using GitHub OIDC. Publishing requires an AWS role configured for GitHub's OIDC provider and the repository variable AWS_ROLE_TO_ASSUME; ordinary validation does not require AWS credentials.
 
 ## Security and Cost
 
 - Never commit AWS access keys, kubeconfig files, Terraform state, database passwords, or real backup data.
 - Prefer GitHub OIDC federation over long-lived AWS access keys.
-- Review EKS endpoint exposure, IAM policies, Kubernetes secrets, and network ingress rules.
+- Review EKS endpoint exposure, IAM policies, Kubernetes Secrets, and network ingress rules.
 - Keep destructive recovery drills within the demo-app namespace on a disposable cluster.
 - Review Terraform plans before apply and remove test resources when no longer needed.
 
@@ -124,7 +126,7 @@ GitHub Actions runs the Terraform format/validation checks, Python smoke tests, 
 
 The repository contains a [validation evidence template](docs/validation-status.md). It is intentionally blank until tests are run. A diagram, Terraform definition, or README statement does not prove that resources are deployed or that a restore has succeeded.
 
-Future improvements include scheduled, tested backup retention; automated backup-failure alerts; additional application integration tests; and regional recovery only if that scope is explicitly selected and implemented.
+Future improvements include tested backup retention, automated backup-failure alerts, additional application integration tests, and regional recovery only if that scope is explicitly selected and implemented.
 
 ## Project Author
 
